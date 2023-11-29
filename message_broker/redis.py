@@ -1,7 +1,6 @@
-from fastapi import FastAPI, HTTPException, WebSocket
 import aioredis
+from services.order import app
 
-app = FastAPI()
 redis = aioredis.from_url("redis://localhost", decode_responses=True)
 
 @app.post("/create_order/{order_id}")
