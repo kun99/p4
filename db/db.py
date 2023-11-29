@@ -50,11 +50,11 @@ def create_user(name):
     print('User created with id {:d}'.format(created_id))
     return created_id
     
-def get_user(user_id):
+def get_user(name):
     conn = connect()
     cursor = conn.cursor()
-    query = "SELECT * FROM users WHERE id = %s"
-    cursor.execute(query, (user_id,))
+    query = "SELECT * FROM users WHERE name = %s"
+    cursor.execute(query, (name,))
     result = cursor.fetchone()
     conn.close()
     return result
