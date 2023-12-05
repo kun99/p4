@@ -215,18 +215,17 @@ def initialize_delivery():
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT,
         order_id INT,
-        payment_id INT,
-        inventory VARCHAR(255)
+        payment_id INT
     )
     """
     cursor.execute(query)
     conn.close()
     
-def create_delivery(user_id, order_id, payment_id, inventory):
+def create_delivery(user_id, order_id, payment_id):
     conn = connect()
     cursor = conn.cursor()
-    query = "INSERT INTO deliveries (user_id, order_id, payment_id, inventory) VALUES (%s, %s, %s, %s)"
-    cursor.execute(query, (user_id, order_id, payment_id, inventory,))
+    query = "INSERT INTO deliveries (user_id, order_id, payment_id) VALUES (%s, %s, %s)"
+    cursor.execute(query, (user_id, order_id, payment_id))
     conn.commit()
     conn.close()
     
