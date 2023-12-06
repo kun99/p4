@@ -1,4 +1,4 @@
-from db.db import initialize_inventory, create_inventory, get_inventory, update_inventory_quantity, delete_inventory
+from db.db import create_inventory, get_inventory, update_inventory_quantity, delete_inventory
 from model.base_model import RequestItem
 import aio_pika
 import asyncio
@@ -9,8 +9,6 @@ import os
 load_dotenv()
 host = os.getenv("HOST")
 port = os.getenv("PORT")
-
-initialize_inventory()
 
 async def update_inventory(request: RequestItem):
     #if there are enough tokens in inventory, push it along to next service

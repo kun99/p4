@@ -1,4 +1,4 @@
-from db.db import initialize_delivery, create_delivery, get_delivery, delete_delivery
+from db.db import create_delivery, get_delivery, delete_delivery
 from model.base_model import RequestItem
 import aio_pika
 import asyncio
@@ -9,8 +9,6 @@ import os
 load_dotenv()
 host = os.getenv("HOST")
 port = os.getenv("PORT")
-
-initialize_delivery()
 
 async def deliver_order(request: RequestItem):
     #deliver order unless there is some problem?
