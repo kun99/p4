@@ -10,30 +10,49 @@ load_dotenv()
 host = os.getenv("HOST")
 port = os.getenv("PORT")
 
+#create delivery record and report success
+#publishes event DELIVERED_ORDER if it works as expected
+#publishes event FAILED_DELIVERY if something fails for some reason
 async def deliver_order(request: RequestItem):
-    #deliver order unless there is some problem?
-    create_delivery(request.data.get("userId"), request.data.get("orderId"), request.data.get("paymentId"))
-    request.data["action"] = "deliveredOrder"
-    print("Succesful delivery!")
-    return request
+    try:
+        create_delivery(request.data.get("userId"), request.data.get("orderId"), request.data.get("paymentId"))
+        request.data["action"] = "deliveredOrder"
+        await publish_message(request, 'DELIVERED_ORDER')
+    except Exception as e:
+        await publish_message(request, 'FAILED_DELIVERY')
 
-async def inventory_consumer():
-    #listening in queue updated_inventory_queue
-    #due to using unique queue names for each event, every event in said unique queue
-    #is unique to the service
+#publishes an event for SEC            
+async def publish_message(request: RequestItem, event):
     connection = await aio_pika.connect_robust(
         host=host,
         port=port,
     )
     channel = await connection.channel()
-    queue = await channel.declare_queue('updated_inventory_queue')
-
+    exchange = await channel.declare_exchange("direct_event", aio_pika.ExchangeType.DIRECT)
+    message_data = {'request': request.model_dump(), 'event_name': event}
+    message_body = json.dumps(message_data)
+    await exchange.publish(
+        aio_pika.Message(body=message_body.encode()),
+        routing_key=event,
+    )
+    await connection.close()
+ 
+#listens for events from SEC 
+async def start_delivery():
+    connection = await aio_pika.connect_robust(
+            host=host,
+            port=port,
+        )
+    channel = await connection.channel()
+    queue = await channel.declare_queue('')
+    
+    await queue.bind(exchange="direct_event", routing_key="START_DELIVERY")
+    
     async def callback(message):
         try:
             request_data_str = message.body.decode()
             message_data = json.loads(request_data_str)
             request = RequestItem(**message_data['request'])
-            #print(f"Received UPDATED_INVENTORY event with request: {request}")
             await deliver_order(request)
 
         except json.JSONDecodeError as e:
@@ -42,14 +61,7 @@ async def inventory_consumer():
         await message.ack()
 
     await queue.consume(callback)
-    
-    try:
-        while True:
-            await asyncio.sleep(1)
-    except asyncio.CancelledError:
-        pass
-
-    await connection.close()
+    await asyncio.Event().wait()
     
 if __name__ == "__main__":
-    asyncio.run(inventory_consumer())
+    asyncio.run(start_delivery())

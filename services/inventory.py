@@ -10,54 +10,55 @@ load_dotenv()
 host = os.getenv("HOST")
 port = os.getenv("PORT")
 
+#inventory is updated by -=1
+#publishes event UPDATED_INVENTORY when succesful
+#publishes event OUT_OF_STOCK when out of stock
+#publishes event INVENTORY_FAILED when unsuccesful
 async def update_inventory(request: RequestItem):
-    #if there are enough tokens in inventory, push it along to next service
-    #could fail to get tokens
-    tokens = get_inventory('tokens')
-    if tokens[2] > 0:
-        #could fail to update quantity
-        new_tokens = tokens[2]-1
-        print(new_tokens)
-        update_inventory_quantity("tokens", new_tokens)
-        #if this is a success then we fine else
-        request.data["action"] = "updatedInventory"
+    try:
+        tokens = get_inventory('tokens')
+        if tokens[2] > 0:
+            new_tokens = tokens[2]-1
+            update_inventory_quantity("tokens", new_tokens)
+            request.data["action"] = "updatedInventory"
+            await publish_message(request, 'UPDATED_INVENTORY')
+        else:
+            await publish_message(request, 'OUT_OF_STOCK')
+    except Exception as e:
+        await publish_message(request, 'INVENTORY_FAILED')
         
-        #publishing message in UPDATED_INVENTORY queue that delivery service is listening in
-        connection = await aio_pika.connect_robust(
-            host=host,
-            port=port,
-        )
-        channel = await connection.channel()
-        queue = await channel.declare_queue('updated_inventory_queue')
-        message_data = {'request': request.model_dump(), 'event_name': 'UPDATED_INVENTORY'}
-        message_body = json.dumps(message_data)
-        await channel.default_exchange.publish(
-            aio_pika.Message(body=message_body.encode()),
-            routing_key='updated_inventory_queue',
-        )
-        #print(f" [x] Sent 'UPDATED_INVENTORY' event with '{message_body}'")
-        await connection.close()
-    else:
-        #publish message with empty inventory event.
-        print("Will publish event {:s}".format(request.failures.get("emptyInventory")))
-        
-async def payment_consumer():
-    #listening in queue payment_processed_queue
-    #due to using unique queue names for each event, every event in said unique queue
-    #is unique to the service
+#publishes an event for SEC            
+async def publish_message(request: RequestItem, event):
     connection = await aio_pika.connect_robust(
         host=host,
         port=port,
     )
     channel = await connection.channel()
-    queue = await channel.declare_queue('payment_processed_queue')
-
+    exchange = await channel.declare_exchange("direct_event", aio_pika.ExchangeType.DIRECT)
+    message_data = {'request': request.model_dump(), 'event_name': event}
+    message_body = json.dumps(message_data)
+    await exchange.publish(
+        aio_pika.Message(body=message_body.encode()),
+        routing_key=event,
+    )
+    await connection.close()
+ 
+#listens for events from SEC 
+async def start_inventory():
+    connection = await aio_pika.connect_robust(
+            host=host,
+            port=port,
+        )
+    channel = await connection.channel()
+    queue = await channel.declare_queue('')
+    
+    await queue.bind(exchange="direct_event", routing_key="START_INVENTORY")
+    
     async def callback(message):
         try:
             request_data_str = message.body.decode()
             message_data = json.loads(request_data_str)
             request = RequestItem(**message_data['request'])
-            #print(f"Received PAYMENT_PROCESSED event with request: {request}")
             await update_inventory(request)
 
         except json.JSONDecodeError as e:
@@ -66,14 +67,7 @@ async def payment_consumer():
         await message.ack()
 
     await queue.consume(callback)
-    
-    try:
-        while True:
-            await asyncio.sleep(1)
-    except asyncio.CancelledError:
-        pass
-
-    await connection.close()
+    await asyncio.Event().wait()
     
 if __name__ == "__main__":
-    asyncio.run(payment_consumer())
+    asyncio.run(start_inventory())

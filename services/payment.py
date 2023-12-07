@@ -10,82 +10,68 @@ load_dotenv()
 host = os.getenv("HOST")
 port = os.getenv("PORT")
 
+#user pays for order and update request data
+#publishes event PAYMENT_PROCESSED when succesful
+#publishes event INSUFFICIENT_FUNDS when user doesnt have sufficient funds
+#publishes event PAYMENT_FAILED when unsuccesful
 async def process_payment(request: RequestItem):
-    #if user has enough credits, push it along to next service
-    #potential problems could be when -> user doesnt have enough credits,next service is occupied with smth else.
-    print(request.data.get("credits"))
-    if request.data.get("credits") > 10:
-        print('User {:d} has sufficient credits.'.format(request.data.get("userId")))
-        credits = request.data.get("credits")
-        updated = update_user_credits(request.data.get("userId"), credits-10)
-        if updated:
-            #could fail to start creating payment
+    try:
+        if request.data.get("credits") > 10:
+            credits = request.data.get("credits")
+            update_user_credits(request.data.get("userId"), credits-10)
             payment_id = create_payment(request.data.get("userId"), request.data.get("orderId"))
             if payment_id is not None:
                 request.data["paymentId"] = payment_id
                 request.data["action"] = "processedPayment"
-                #publishing message in PAYMENT_PROCESSED queue that inventory service is listening in
-                try:
-                    connection = await aio_pika.connect_robust(
-                        host=host,
-                        port=port,
-                    )
-                    channel = await connection.channel()
-                    queue = await channel.declare_queue('payment_processed_queue')
-                    message_data = {'request': request.model_dump(), 'event_name': 'PAYMENT_PROCESSED'}
-                    message_body = json.dumps(message_data)
-                    await channel.default_exchange.publish(
-                        aio_pika.Message(body=message_body.encode()),
-                        routing_key='payment_processed_queue',
-                    )
-                    #print(f" [x] Sent 'PAYMENT_PROCESSED' event with '{message_body}'")
-                except Exception as e:
-                    print("Couldnt publish message")
-                finally:
-                    if connection is not None and not connection.is_closed:
-                        await connection.close()
-            else:
-                print("GONNA SEND OUT A FAILED TO ACCESS DB EVENT")
+                await publish_message(request, 'PAYMENT_PROCESSED')
         else:
-            print("GONNA SEND OUT A FAILED TO ACCESS DB EVENT")
-    else:
-        #publish message with insufficient funds event.
-        print("Will publish event {:s}".format(request.failures.get("insufficientFunds")))
-        print('User {:d} has insufficient credits.'.format(request.data.get("userId")))
+            await publish_message(request, 'INSUFFICIENT_FUNDS')
     
-async def order_consumer():
-    #listening in queue order_created_queue
-    #due to using unique queue names for each event, every event in said unique queue
-    #is unique to the service
-    try: 
-        connection = await aio_pika.connect_robust(
+    except Exception as e:
+        request.data["action"] = "paymentFailed"
+        await publish_message(request, 'PAYMENT_FAILED')
+        
+#publishes an event for SEC            
+async def publish_message(request: RequestItem, event):
+    connection = await aio_pika.connect_robust(
+        host=host,
+        port=port,
+    )
+    channel = await connection.channel()
+    exchange = await channel.declare_exchange("direct_event", aio_pika.ExchangeType.DIRECT)
+    message_data = {'request': request.model_dump(), 'event_name': event}
+    message_body = json.dumps(message_data)
+    await exchange.publish(
+        aio_pika.Message(body=message_body.encode()),
+        routing_key=event,
+    )
+    await connection.close()
+ 
+#listens for events from SEC 
+async def start_payment():
+    connection = await aio_pika.connect_robust(
             host=host,
             port=port,
         )
-        channel = await connection.channel()
-        queue = await channel.declare_queue('order_created_queue')
+    channel = await connection.channel()
+    queue = await channel.declare_queue('')
+    
+    await queue.bind(exchange="direct_event", routing_key="START_PAYMENT")
+    
+    async def callback(message):
+        try:
+            request_data_str = message.body.decode()
+            message_data = json.loads(request_data_str)
+            request = RequestItem(**message_data['request'])
+            await process_payment(request)
 
-        async def callback(message):
-            try:
-                request_data_str = message.body.decode()
-                message_data = json.loads(request_data_str)
-                request = RequestItem(**message_data['request'])
-                #print(f"Received ORDER_CREATED event with request: {request}")
-                await process_payment(request)
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON: {e}")
 
-            except json.JSONDecodeError as e:
-                print(f"Error decoding JSON: {e}")
+        await message.ack()
 
-            await message.ack()
-
-        await queue.consume(callback)
-        await asyncio.Event().wait()
-        
-    except Exception as e:
-        print("Couldnt ")
-    finally:
-        if connection is not None and not connection.is_closed:
-            await connection.close()
+    await queue.consume(callback)
+    await asyncio.Event().wait()
     
 if __name__ == "__main__":
-    asyncio.run(order_consumer())
+    asyncio.run(start_payment())
