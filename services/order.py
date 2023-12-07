@@ -1,4 +1,4 @@
-from db.db import initialize_users, initialize_orders, create_user, get_user, create_order, get_order, delete_order
+from db.db import create_user, get_user, create_order, get_order, delete_order
 from model.base_model import RequestItem
 from dotenv import load_dotenv
 import os
