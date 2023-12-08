@@ -1,33 +1,35 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: Delivery
+  name: delivery
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
-      app: Delivery
+      app: delivery
   template:
     metadata:
       labels:
-        app: Delivery
+        app: delivery
     spec:
       containers:
-      - name: Delivery
-        image: ghcr.io/kun99/p4/delivery:latest
-        env:
-        - name: RABBITMQ_HOST
-          value: "rabbitmq"
-        - name: RABBITMQ_PORT
-          value: "5672"
+        - name: delivery
+          image: ghcr.io/kun99/p4/delivery:latest
+          env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672"
+      imagePullSecrets:
+        - name: p2secret
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: DeliveryService
+  name: delivery-service
 spec:
   selector:
-    app: DeliveryService
+    app: delivery-service
   ports:
     - protocol: TCP
       port: 80

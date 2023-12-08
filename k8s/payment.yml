@@ -1,33 +1,35 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: Order
+  name: payment
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
-      app: Payment
+      app: payment
   template:
     metadata:
       labels:
-        app: Payment
+        app: payment
     spec:
       containers:
-      - name: Payment
-        image: ghcr.io/kun99/p4/payment:latest
-        env:
-        - name: RABBITMQ_HOST
-          value: "rabbitmq"
-        - name: RABBITMQ_PORT
-          value: "5672"
+        - name: payment
+          image: ghcr.io/kun99/p4/payment:latest
+          env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672"
+      imagePullSecrets:
+        - name: p2secret
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: PaymentService
+  name: payment-service
 spec:
   selector:
-    app: PaymentService
+    app: payment-service
   ports:
     - protocol: TCP
       port: 80

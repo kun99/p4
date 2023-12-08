@@ -2,4 +2,4 @@ tenacity
 fastapi
 aio_pika
 python-dotenv
-
+aiomysql
