@@ -116,7 +116,6 @@ async def process_event(event_type):
     return publishing_event
     
 async def publish_event(publishing_event, request: RequestItem):
-    #retries, circuit break later
     connection = await aio_pika.connect_robust(
         host=host,
         port=port,
@@ -126,6 +125,7 @@ async def publish_event(publishing_event, request: RequestItem):
 
     message_data = {'request': request.model_dump(), 'event_name': publishing_event}
     message_body = json.dumps(message_data)
+    print(publishing_event)
     await exchange.publish(
         aio_pika.Message(body=message_body.encode()),
         routing_key=publishing_event,
@@ -136,7 +136,6 @@ async def event_listener():
     connection = None
     while not stop_listener:
         try: 
-            print("LISTENING")
             connection = await aio_pika.connect_robust(
                 host=host,
                 port=port,
