@@ -69,6 +69,7 @@ async def start_transaction(request: RequestItem):
         await asyncio.sleep(35)
         stop_listener = True
         return
+    print("STARTING TRANSACTION")
     connection = await aio_pika.connect_robust(
         host=host,
         port=port,
