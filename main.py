@@ -174,6 +174,10 @@ async def event_listener():
         finally:
             if connection is not None and not connection.is_closed and queue is not None:
                 await connection.close()
+                
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
     
 # request looks like this
 # {
