@@ -9,7 +9,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 load_dotenv()
 host = os.getenv("HOST")
-port = os.getenv("PORT")
+port = int(os.getenv("PORT"))
 
 #create delivery record and report success
 #publishes event DELIVERED_ORDER if it works as expected

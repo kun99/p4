@@ -9,7 +9,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 load_dotenv()
 host = os.getenv("HOST")
-port = os.getenv("PORT")
+port = int(os.getenv("PORT"))
 
 #inventory is updated by -=1
 #publishes event UPDATED_INVENTORY when succesful

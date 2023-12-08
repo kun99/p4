@@ -16,9 +16,17 @@ spec:
         - name: order
           image: ghcr.io/kun99/p4/order:latest
           env:
-            - name: RABBITMQ_HOST
-              value: "rabbitmq"
-            - name: RABBITMQ_PORT
+            - name: MYSQL_HOST
+              value: mysql-service
+            - name: MYSQL_USER
+              value: root
+            - name: MYSQL_PASSWORD
+              value: kunRoot1!
+            - name: MYSQL_DB
+              value: p4
+            - name: HOST
+              value: rabbitmq
+            - name: PORT
               value: "5672"
       imagePullSecrets:
         - name: p2secret
@@ -29,7 +37,7 @@ metadata:
   name: order-service
 spec:
   selector:
-    app: order-service
+    app: order
   ports:
     - protocol: TCP
       port: 80

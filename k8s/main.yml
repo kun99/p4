@@ -38,7 +38,7 @@ metadata:
   name: main-service
 spec:
   selector:
-    app: main-service
+    app: main
   ports:
     - protocol: TCP
       port: 80

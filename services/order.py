@@ -9,7 +9,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 load_dotenv()
 host = os.getenv("HOST")
-port = os.getenv("PORT")
+port = int(os.getenv("PORT"))
     
 #if user exists in database use user data else create user
 #create an order and update request data

@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mysql
+spec:
+  containers:
+    - name: mysql
+      image: mysql
+      ports:
+        - containerPort: 80
+    - name: mysql-container
+      image: mysql:latest
+      env:
+        - name: MYSQL_HOST
+          value: mysql-service
+        - name: MYSQL_USER
+          value: root
+        - name: MYSQL_PASSWORD
+          value: kunRoot1!
+        - name: MYSQL_DB
+          value: p4
+      ports:
+        - containerPort: 3306
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-service
+spec:
+  selector:
+    app: mysql
+  ports:
+    - protocol: TCP
+      port: 3306
+      targetPort: 3306
