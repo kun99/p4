@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: Order
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: Payment
+  template:
+    metadata:
+      labels:
+        app: Payment
+    spec:
+      containers:
+      - name: Payment
+        image: ghcr.io/kun99/p4/payment:latest
+        env:
+        - name: RABBITMQ_HOST
+          value: "rabbitmq"
+        - name: RABBITMQ_PORT
+          value: "5672"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: PaymentService
+spec:
+  selector:
+    app: PaymentService
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: ClusterIP

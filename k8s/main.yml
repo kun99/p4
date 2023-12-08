@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: Main
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: Main
+  template:
+    metadata:
+      labels:
+        app: Main
+    spec:
+      containers:
+      - name: Main
+        image: ghcr.io/kun99/p4/main:latest
+        ports:
+        - containerPort: 80
+        volumeMounts:
+          - name: data
+            mountPath: /app/data
+        env:
+        - name: HOST
+          value: "rabbitmq"
+        - name: PORT
+          value: "5672"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: volume-p4
+      imagePullSecrets:
+        - name: p2secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: MainService
+spec:
+  selector:
+    app: MainService
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: ClusterIP

@@ -1,4 +1,4 @@
-name: Inventory Service Backend CI
+name: Delivery Service Backend CI
 
 on:
   push:

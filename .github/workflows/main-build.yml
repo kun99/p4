@@ -1,4 +1,4 @@
-name: Inventory Service Backend CI
+name: Main Build CI
 
 on:
   push:
