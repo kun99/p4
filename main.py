@@ -136,6 +136,7 @@ async def event_listener():
     connection = None
     while not stop_listener:
         try: 
+            print("LISTENING")
             connection = await aio_pika.connect_robust(
                 host=host,
                 port=port,
