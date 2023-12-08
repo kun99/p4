@@ -14,12 +14,27 @@ port = os.getenv("PORT")
 #publishes event DELIVERED_ORDER if it works as expected
 #publishes event FAILED_DELIVERY if something fails for some reason
 async def deliver_order(request: RequestItem):
+    step = 0
     try:
-        create_delivery(request.data.get("userId"), request.data.get("orderId"), request.data.get("paymentId"))
+        id = await create_delivery(request.data.get("userId"), request.data.get("orderId"), request.data.get("paymentId"))
         request.data["action"] = "deliveredOrder"
+        request.data["deliveryId"] = id
+        step = 1
         await publish_message(request, 'DELIVERED_ORDER')
     except Exception as e:
+        request.data["action"] = "deliveryFailed"
+        await rollback_delivery(request, step)
+        
+async def rollback_delivery(request: RequestItem, step):
+    try:
+        print("Rolling back delivery")
+        if step > 0:
+            await delete_delivery(request.data["deliveryId"])
         await publish_message(request, 'FAILED_DELIVERY')
+            
+    except Exception as e:
+        print(e)
+        print("Couldn't rollback delivery")
 
 #publishes an event for SEC            
 async def publish_message(request: RequestItem, event):
@@ -29,6 +44,7 @@ async def publish_message(request: RequestItem, event):
     )
     channel = await connection.channel()
     exchange = await channel.declare_exchange("direct_event", aio_pika.ExchangeType.DIRECT)
+
     message_data = {'request': request.model_dump(), 'event_name': event}
     message_body = json.dumps(message_data)
     await exchange.publish(
@@ -62,6 +78,6 @@ async def start_delivery():
 
     await queue.consume(callback)
     await asyncio.Event().wait()
-    
+        
 if __name__ == "__main__":
     asyncio.run(start_delivery())

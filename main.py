@@ -6,8 +6,17 @@ import asyncio
 import os
 import json
 from model.base_model import RequestItem
+from opentelemetry import trace
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.aiohttp import AioHttpInstrumentor
 
 app = FastAPI()
+
+trace.set_tracer_provider(trace.TracerProvider())
+tracer = trace.get_tracer(__name__)
+
+FastAPIInstrumentor().instrument_app(app)
+AioHttpInstrumentor().instrument()
 
 load_dotenv()
 host = os.getenv("HOST")
@@ -21,14 +30,19 @@ async def buy_token(request: RequestItem):
     try:
         global stop_listener
         stop_listener = False
-        asyncio.create_task(event_listener())
-        await start_transaction(request)
+        task_event_listener = asyncio.create_task(event_listener())
+        task_start_transaction = asyncio.create_task(start_transaction(request))
+        await asyncio.gather(task_event_listener, task_start_transaction)
         return JSONResponse(content={"message": returning})
     except Exception as e:
+        print(e)
         return returning
 
-async def start_transaction(request: RequestItem):   
+async def start_transaction(request: RequestItem):  
     if request.action == "failAtStart":
+        global stop_listener, returning
+        stop_listener = True
+        returning = "FAIL"
         raise Exception("Fail at start")     
     connection = await aio_pika.connect_robust(
         host=host,
@@ -36,7 +50,7 @@ async def start_transaction(request: RequestItem):
     )
     channel = await connection.channel()
     exchange = await channel.declare_exchange("direct_event", aio_pika.ExchangeType.DIRECT)
-    
+
     message_data = {'request': request.dict(), 'event_name': 'TRANSACTION_STARTED'}
     message_body = json.dumps(message_data)
     await exchange.publish(
@@ -53,38 +67,28 @@ async def process_event(event_type):
     if event_type == 'ORDER_CREATED':
         publishing_event = 'START_PAYMENT'   
     elif event_type == 'ORDER_FAILED':
+        returning = "FAILED"
         stop_listener = True
-        returning = "UNKNOWN"
-        print('order failed')    
     elif event_type == 'PAYMENT_PROCESSED':
-        stop_listener = True
         publishing_event = 'START_INVENTORY'   
     elif event_type == 'PAYMENT_FAILED':
-        stop_listener = True
         returning = "UNKNOWN"
-        print('payment failed')   
+        publishing_event = 'ROLLBACK_ORDER'
     elif event_type == 'UPDATED_INVENTORY':
         publishing_event = 'START_DELIVERY'    
     elif event_type == 'INVENTORY_FAILED':
-        stop_listener = True
-        returning = "UNKNOWN"
-        print('inventory failed')     
+        publishing_event = 'ROLLBACK_PAYMENT' 
     elif event_type == 'DELIVERED_ORDER':
-        stop_listener = True
         returning = "SUCCESS"
-        print(returning)
+        stop_listener = True
     elif event_type == 'FAILED_DELIVERY':
-        stop_listener = True
-        returning = "UNKNOWN"
-        print('delivery failed')    
+        publishing_event = 'ROLLBACK_INVENTORY' 
     elif event_type == 'INSUFFICIENT_FUNDS':
-        stop_listener = True
+        publishing_event = 'ROLLBACK_ORDER' 
         returning = "INSUFFICIENT_FUNDS"
-        print('insufficient funds')
     elif event_type == 'OUT_OF_STOCK':
-        stop_listener = True
+        publishing_event = 'ROLLBACK_PAYMENT' 
         returning = "OUT_OF_STOCK"
-        print('we out')
     return publishing_event
     
 async def publish_event(publishing_event, request: RequestItem):
@@ -95,6 +99,7 @@ async def publish_event(publishing_event, request: RequestItem):
     )
     channel = await connection.channel()
     exchange = await channel.declare_exchange("direct_event", aio_pika.ExchangeType.DIRECT)
+
     message_data = {'request': request.model_dump(), 'event_name': publishing_event}
     message_body = json.dumps(message_data)
     await exchange.publish(
@@ -144,7 +149,7 @@ async def event_listener():
         except Exception as e:
             print("Couldn't be set up to receive any messages")
         finally:
-            if connection is not None and not connection.is_closed:
+            if connection is not None and not connection.is_closed and queue is not None:
                 await connection.close()
     
 # request looks like this
