@@ -82,6 +82,7 @@ async def publish_message(request: RequestItem, event):
  
 #listens for events from SEC       
 async def start_consumer():
+    print("FUCK")
     connection = await aio_pika.connect_robust(
         host=host,
         port=port,

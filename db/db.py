@@ -64,6 +64,7 @@ async def initialize():
     await pool.wait_closed()
 
 async def create_user(name):
+    print("HERE")
     pool = await connect()
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:

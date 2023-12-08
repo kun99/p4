@@ -88,7 +88,6 @@ async def process_event(event_type):
     #compensating transactions coming soon ~ in 5 hrs or so :)
     print(f"RECEIVED EVENT {event_type}")
     global stop_listener, returning
-    print(returning)
     publishing_event = ''
     if event_type == 'ORDER_CREATED':
         publishing_event = 'START_PAYMENT'   

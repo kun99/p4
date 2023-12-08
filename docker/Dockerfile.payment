@@ -1,0 +1,11 @@
+FROM python:3.10
+
+WORKDIR /app
+
+COPY ../services /app/services/
+
+COPY ../db /app/db/
+
+RUN pip install -r requirements.txt
+
+CMD ["python", "-m", "services.payment"]
