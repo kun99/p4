@@ -13,8 +13,7 @@ MYSQL_DB = os.getenv("MYSQL_DB")
 async def connect():
     pool = await aiomysql.create_pool(
         host=MYSQL_HOST,
-        user=MYSQL_USER,
-        password=MYSQL_PASSWORD,
+        user='root',
         db=MYSQL_DB,
         loop=asyncio.get_event_loop()
     )
@@ -58,10 +57,6 @@ async def initialize():
                 payment_id INT
             );
             """
-            create_user_query = f"CREATE USER IF NOT EXISTS '{MYSQL_USER}'@'{MYSQL_HOST}' IDENTIFIED BY '{MYSQL_PASSWORD}'"
-            await cursor.execute(create_user_query)
-            grant_privileges_query = f"GRANT ALL PRIVILEGES ON {MYSQL_DB}.* TO '{MYSQL_USER}'@'{MYSQL_HOST}' WITH GRANT OPTION"
-            await cursor.execute(grant_privileges_query)
             await cursor.execute(query)
             await conn.commit()
     pool.close()
