@@ -2,9 +2,7 @@ FROM python:3.10
 
 WORKDIR /app
 
-COPY ../services /app/services/
-
-COPY ../db /app/db/
+COPY .. /app/
 
 RUN pip install -r requirements.txt
 

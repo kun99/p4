@@ -1,3 +1,5 @@
-aio_pika
-load-dotenv
 tenacity
+fastapi
+aio_pika
+python-dotenv
+
