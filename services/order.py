@@ -1,10 +1,11 @@
 from db.db import create_user, get_user, delete_user, create_order, get_order, delete_order
 from model.base_model import RequestItem
-from dotenv import load_dotenv
-import os
-import json
 import aio_pika
 import asyncio
+import json
+from dotenv import load_dotenv
+import os
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 load_dotenv()
 host = os.getenv("HOST")
@@ -32,15 +33,18 @@ async def order_creation(request: RequestItem):
         request.data["credits"] = credits
         step = 1
         order_id = await create_order(id, request.data.get("name"))
-        request.data["action"] = "orderCreated"
         request.data["orderId"] = order_id
         step = 2
+        if request.action == "orderFail":
+            raise Exception()
         await publish_message(request, "ORDER_CREATED")
         
     except Exception as e:
-        request.data["action"] = "orderFailed"
         await rollback_order(request, step)
-        
+
+#undo all changes that were made in order
+#publish event to sec that means that the transaction failed and all rollbacks were carried out
+@retry(stop=stop_after_attempt(5), wait=wait_fixed(1), after=lambda retry_state: print("Timeout"))
 async def rollback_order(request: RequestItem, step):
     created = request.data["created"]
     try:

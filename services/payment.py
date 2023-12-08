@@ -5,6 +5,7 @@ import asyncio
 import json
 from dotenv import load_dotenv
 import os
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 load_dotenv()
 host = os.getenv("HOST")
@@ -17,28 +18,30 @@ port = os.getenv("PORT")
 async def process_payment(request: RequestItem):
     step = 0
     try:
-        print(request.data)
-        if request.data.get("credits") > 10:
+        if request.action == "insufficientFunds":
+            raise Exception()
+        if request.data.get("credits") >= 10:
             credits = request.data.get("credits")
             user_id = request.data.get("userId")
             user = await update_user_credits(request.data.get("name"), user_id, credits-10)
             request.data["credits"] = user[2]
-            print(request.data.get("credits"))
             step = 1
             payment_id = await create_payment(request.data.get("userId"), request.data.get("orderId"))
             if payment_id is not None:
                 request.data["paymentId"] = payment_id
-                request.data["action"] = "processedPayment"
                 step = 2
+                if request.action == "paymentFail":
+                    raise Exception()
                 await publish_message(request, 'PAYMENT_PROCESSED')
         else:
-            request.data["action"] = "insufficientFunds"
             await rollback_payment(request, step)
     
     except Exception as e:
-        request.data["action"] = "paymentFailed"
         await rollback_payment(request, step)
-        
+
+#undo all changes that were made in payment
+#publish event to sec that will trigger rollback for order
+@retry(stop=stop_after_attempt(5), wait=wait_fixed(1), after=lambda retry_state: print("Timeout"))
 async def rollback_payment(request: RequestItem, step):
     credits = request.data.get("credits")
     try:

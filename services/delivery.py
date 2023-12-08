@@ -5,6 +5,7 @@ import asyncio
 import json
 from dotenv import load_dotenv
 import os
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 load_dotenv()
 host = os.getenv("HOST")
@@ -17,14 +18,17 @@ async def deliver_order(request: RequestItem):
     step = 0
     try:
         id = await create_delivery(request.data.get("userId"), request.data.get("orderId"), request.data.get("paymentId"))
-        request.data["action"] = "deliveredOrder"
         request.data["deliveryId"] = id
         step = 1
+        if request.action == "deliveryFail":
+            raise Exception()
         await publish_message(request, 'DELIVERED_ORDER')
     except Exception as e:
-        request.data["action"] = "deliveryFailed"
         await rollback_delivery(request, step)
-        
+
+#undo all changes that were made in delivery
+#publish event to sec that will trigger rollback for inventory   
+@retry(stop=stop_after_attempt(5), wait=wait_fixed(1), after=lambda retry_state: print("Timeout"))
 async def rollback_delivery(request: RequestItem, step):
     try:
         print("Rolling back delivery")

@@ -6,17 +6,22 @@ import asyncio
 import os
 import json
 from model.base_model import RequestItem
-from opentelemetry import trace
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.aiohttp import AioHttpInstrumentor
+# from opentelemetry import trace
+# from opentelemetry.exporter.jaeger import JaegerSpanExporter
+# from opentelemetry.sdk.trace import TracerProvider
+# from opentelemetry.sdk.trace.export import BatchExportSpanProcessor
+# from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+# from opentelemetry.instrumentation.aiohttp import AioHTTPInstrumentor
 
 app = FastAPI()
 
-trace.set_tracer_provider(trace.TracerProvider())
-tracer = trace.get_tracer(__name__)
+# trace.set_tracer_provider(TracerProvider())
+# tracer = trace.get_tracer(__name__)
+# span_processor = BatchExportSpanProcessor(JaegerSpanExporter(service_name="name"))
+# trace.get_tracer_provider().add_span_processor(span_processor)
 
-FastAPIInstrumentor().instrument_app(app)
-AioHttpInstrumentor().instrument()
+# FastAPIInstrumentor.instrument_app(app)
+# AioHTTPInstrumentor.instrument()
 
 load_dotenv()
 host = os.getenv("HOST")
@@ -28,22 +33,42 @@ returning = "UNKNOWN"
 @app.post("/buy_token")
 async def buy_token(request: RequestItem):
     try:
-        global stop_listener
+        global returning, stop_listener
         stop_listener = False
+        
         task_event_listener = asyncio.create_task(event_listener())
         task_start_transaction = asyncio.create_task(start_transaction(request))
-        await asyncio.gather(task_event_listener, task_start_transaction)
-        return JSONResponse(content={"message": returning})
+        #await asyncio.gather(task_event_listener, task_start_transaction)
+        done, pending = await asyncio.wait(
+            [task_event_listener, task_start_transaction],
+            timeout=30,
+            return_when=asyncio.ALL_COMPLETED
+        )
+        if pending:
+            raise asyncio.TimeoutError()
+        
+        message = returning
+        returning = "UNKNOWN"
+        if message == "SUCCESS":
+            return JSONResponse(content={"message": message}, status_code=200)
+        else:
+            return JSONResponse(content={"message": message}, status_code=500)
+    except asyncio.TimeoutError:
+        return JSONResponse(content={"message": "TIMEOUT"}, status_code=504)
     except Exception as e:
         print(e)
         return returning
 
-async def start_transaction(request: RequestItem):  
+async def start_transaction(request: RequestItem):
+    global stop_listener
     if request.action == "failAtStart":
-        global stop_listener, returning
         stop_listener = True
-        returning = "FAIL"
-        raise Exception("Fail at start")     
+        print("Failed at start")
+        return
+    elif request.action == "timeout":
+        await asyncio.sleep(35)
+        stop_listener = True
+        return
     connection = await aio_pika.connect_robust(
         host=host,
         port=port,
@@ -63,16 +88,15 @@ async def process_event(event_type):
     #compensating transactions coming soon ~ in 5 hrs or so :)
     print(f"RECEIVED EVENT {event_type}")
     global stop_listener, returning
+    print(returning)
     publishing_event = ''
     if event_type == 'ORDER_CREATED':
         publishing_event = 'START_PAYMENT'   
     elif event_type == 'ORDER_FAILED':
-        returning = "FAILED"
         stop_listener = True
     elif event_type == 'PAYMENT_PROCESSED':
         publishing_event = 'START_INVENTORY'   
     elif event_type == 'PAYMENT_FAILED':
-        returning = "UNKNOWN"
         publishing_event = 'ROLLBACK_ORDER'
     elif event_type == 'UPDATED_INVENTORY':
         publishing_event = 'START_DELIVERY'    

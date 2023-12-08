@@ -5,6 +5,7 @@ import asyncio
 import json
 from dotenv import load_dotenv
 import os
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 load_dotenv()
 host = os.getenv("HOST")
@@ -17,26 +18,33 @@ port = os.getenv("PORT")
 async def update_inventory(request: RequestItem):
     step = 0
     try:
+        if request.action == "outOfStock":
+            step = -1
+            raise Exception()
         tokens = await get_inventory('tokens')
         if tokens[2] > 0:
             new_tokens = tokens[2]-1
             await update_inventory_quantity(tokens[0], new_tokens)
-            request.data["action"] = "updatedInventory"
             step = 1
+            if request.action == "inventoryFail":
+                raise Exception()
             await publish_message(request, 'UPDATED_INVENTORY')
         else:
             await rollback_inventory(request, step-1)
     except Exception as e:
-        request.data["action"] = "inventoryFailed"
         await rollback_inventory(request, step)
         
+#undo all changes that were made in inventory
+#publish event to sec that will trigger rollback for payment
+@retry(stop=stop_after_attempt(5), wait=wait_fixed(1), after=lambda retry_state: print("Timeout"))   
 async def rollback_inventory(request: RequestItem, step):
     try:
         print("Rolling back inventory")
         if step == -1:
+            print("HERE")
             await publish_message(request, 'OUT_OF_STOCK')
         elif step > 0:
-            tokens = get_inventory('tokens')
+            tokens = await get_inventory('tokens')
             await update_inventory_quantity(request.data["userId"], tokens[2]+1)
             await publish_message(request, 'INVENTORY_FAILED')
             
