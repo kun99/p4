@@ -18,10 +18,6 @@ spec:
           env:
             - name: MYSQL_HOST
               value: mysql-service
-            - name: MYSQL_USER
-              value: user
-            - name: MYSQL_PASSWORD
-              value: "1234"
             - name: MYSQL_ROOT_PASSWORD
               value: "root"
             - name: MYSQL_DB
@@ -38,7 +34,7 @@ spec:
         - name: mysql-init
           configMap:
             name: mysql-init
-        - name: mysql-c  # <-- Corrected name
+        - name: mysql-c
           configMap:
             name: mysql-c
 ---
