@@ -27,7 +27,7 @@ spec:
             - name: MYSQL_DB
               value: p4
             - name: HOST
-              value: rabbitmq
+              value: rabbitmq-service
             - name: PORT
               value: "5672"
       imagePullSecrets:

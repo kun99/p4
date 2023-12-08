@@ -22,7 +22,7 @@ spec:
               mountPath: /app/data
           env:
             - name: HOST
-              value: "rabbitmq"
+              value: rabbitmq-service
             - name: PORT
               value: "5672"
       volumes:

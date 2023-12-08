@@ -170,6 +170,9 @@ async def event_listener():
             await asyncio.sleep(1)
             
         except Exception as e:
+            print(e)
+            print(host)
+            print(port)
             print("Couldn't be set up to receive any messages")
         finally:
             if connection is not None and not connection.is_closed and queue is not None:
