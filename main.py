@@ -25,7 +25,7 @@ app = FastAPI()
 
 load_dotenv()
 host = os.getenv("HOST")
-port = os.getenv("PORT")
+port = int(os.getenv("PORT"))
 
 stop_listener = False
 returning = "UNKNOWN"
@@ -171,8 +171,6 @@ async def event_listener():
             
         except Exception as e:
             print(e)
-            print(host)
-            print(port)
             print("Couldn't be set up to receive any messages")
         finally:
             if connection is not None and not connection.is_closed and queue is not None:
